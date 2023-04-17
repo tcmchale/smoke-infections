@@ -12,3 +12,4 @@ I am restricting my analysis to California because looking at the entire country
 1) I was initially using a repository in the UMN Github but because I am going to be adding large files and may want to simulate something, I switched over to github.com. So I created a submodule from the UMN github. Thus my work is all in the submodule that you can follow from my main repository.
 2) In the data-cleaning file I was trying to create animations that would follow both covid and smoke exposure over time. But I have not gotten this code to work yet.
 3) In the shiny-script.R file, I have created a Shiny app just for visualization. This allows you to select cases or deaths and a month of the year. I will plan to add more data to this and a hoveron feature to see more data when hovering over each county in California. 
+4) I have not yet put in any of the statistical analysis
