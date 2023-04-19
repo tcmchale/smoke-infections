@@ -1,6 +1,3 @@
-[submodule "Desktop/Wildfire-fungi-project/github-smoke/final-project_smoke-infections"]
-	path = Desktop/Wildfire-fungi-project/github-smoke/final-project_smoke-infections
-	url = https://github.umn.edu/mchal053/final-project_smoke-infections.git
 [submodule "final-project"]
 	path = final-project
 	url = https://github.umn.edu/mchal053/final-project_smoke-infections.git
