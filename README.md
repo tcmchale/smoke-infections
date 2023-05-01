@@ -1,16 +1,19 @@
-# smoke-infections
-Analyzing exposure to smoke and risk of infections
+Project name: Spatiotemporal Assocations of COVID-19 and Smoke Exposure in California
 
-We will be analyzing the spatiotemporal risk of exposure to smoke and infections.
-We hypothesize that exposure to smoke and incidence of wildfires may increase the risk of fungal infections such as aspergillosis, mucormycosis or cryptococcosis.
+Project purpose: the purpose of the product is to explore the spatial assocations of COVID-19 and smoke in California. I am working on another project exploring fungal infections and smoke exposure. However, I still do not have access to the clinical data for fungal infections. This project serves as a model for how I can model the fungal infections when the data is available. 
 
-We will use COVID 2020 data as an example of how this analysis might be done. 
+Availability: The product can be accessed on my publicly available github. The html document that describes the data is avialable in the github as well as at the independt link: file:///Users/thomasmchale/Desktop/Wildfire-fungi-project/repository/smoke-infections/final-project_McHale.html.
+There is also a shiny app associated with the project that is available at the link: https://mchal053.shinyapps.io/smoke-covid/
 
-For the draft submission:
-I am restricting my analysis to California because looking at the entire country was too large a dataset and caused R to freeze or take a really long time to process. 
 
-1) I was initially using a repository in the UMN Github but because I am going to be adding large files and may want to simulate something, I switched over to github.com. So I created a submodule from the UMN github. Thus my work is all in the submodule that you can follow from my main repository.
-2) In the data-cleaning file I was trying to create animations that would follow both covid and smoke exposure over time. But I have not gotten this code to work yet.
-3) In the shiny-script.R file, I have created a Shiny app just for visualization. This allows you to select cases or deaths and a month of the year. I will plan to add more data to this and a hoveron feature to see more data when hovering over each county in California. 
-EDIT ON 4/19: if you follow smoke-covid/app.R you will find the functional data visualization shiny app code
-4) I have not yet put in any of the statistical analysis
+Product features: The main product is a document that describes that spatial trends of COVID-19, smoke exposure as well as population and demographic data in California. There is also an interactive shiny app that allows users to explore the temporal trends of COVID-19 and smoke exposure in California in 2020. 
+
+Programming challenges: The first challenge was the Shiny app that allows for interactivity in exploring the temporal trends. The app took a long time to get functional as well as to make it publicly available. There were issues with the working directory on my local machine and being read when trying to render the app. 
+The next challenge was the statistical analysis. In this document I include the first step in performing a spatial statistical analysis. This consists of semivariograms to determine if spatial aucorrelation exists in the data. I found that indeed both COVID-19 and smoke exposure were spatially autocorrelated in California for the year 2020.
+The next step will be to perform universal krigeing. I did try extensively to achieve this, but I had difficulty converting the simple feature to a space-time data frame that can account for both the variable and the change over time. 
+Ultimately, I plan to create a universal krige model that can explore the degree of correlation between COVID-19 and smoke exposure as well as account for time and the demographic varialbes displayed here. 
+
+Division of labor: Thomas McHale is responsible for all features in this project.
+
+Future work: See above, I hope to finish the statistical analysis. In addition, I hope to apply this to fungal infections.
+
