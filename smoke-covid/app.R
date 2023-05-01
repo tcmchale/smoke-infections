@@ -14,6 +14,7 @@ library(sf)
 library(here)
 library(lubridate)
 
+
 # Define the file paths relative to the app directory
 covid_data_monthly_file <- here( "shapefiles", "covid_data_monthly.shp")
 county_smoke_monthly_file <- here("shapefiles", "county_smoke_monthly_ca.shp")
@@ -22,8 +23,10 @@ months_of_year <- c("January", "February", "March", "April", "May", "June",
                     "July", "August", "September", "October", "November", "December")
 
 # Load the data
+
 covid_data_monthly <- st_read(covid_data_monthly_file)
-county_smoke_monthly <- st_read(county_smoke_monthly_file) 
+county_smoke_monthly <- st_read(county_smoke_monthly_file)
+
 
 
 # Define the UI
@@ -36,7 +39,8 @@ ui <- fluidPage(
     sidebarPanel(
       selectInput("variable",
                   "Select COVID-19 Variable:",
-                  choices = c("Cases" = "cases", "Deaths" = "deaths")),
+                  choices = c("Cases per 10,000" = "c__1000", 
+                              "Deaths per 10,000" = "d__1000")),
       # Update the selectInput choices with sorted months
       selectInput("selected_covid_month",
                   "Select COVID-19 Month:",
@@ -86,8 +90,8 @@ server <- function(input, output, session) {
         ),
         label = paste0(filtered_data$NAME, 
                        "; ",
-                       ifelse(selected_variable == "cases", "Cases: ", "Deaths: "),
-                       format(filtered_data[[selected_variable]], big.mark = ",")),
+                       ifelse(selected_variable == "c__1000", "Cases per 10,000: ", "Deaths per 10,000: "),
+                       format(round(filtered_data[[selected_variable]], 2), nsmall=2, big.mark = ",")),
         labelOptions = labelOptions(
           style = list("font-weight" = "normal"),
           textsize = "15px",
@@ -98,7 +102,7 @@ server <- function(input, output, session) {
       addLegend(
         pal = pal,
         values = filtered_data[[selected_variable]],
-        title = ifelse(selected_variable == "cases", "Cases", "Deaths"),
+        title = ifelse(selected_variable == "c__1000", "Cases per 10,000", "Deaths per 10,000"),
         position = "bottomright",
         layerId = "legend"
       )
@@ -155,3 +159,7 @@ server <- function(input, output, session) {
 
 # Run the Shiny app
 shinyApp(ui, server)
+
+
+
+                       

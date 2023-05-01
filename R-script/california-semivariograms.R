@@ -1,8 +1,39 @@
-library(automap)
+library(sf)
+library(gstat)
+library(sp)
+library(spacetime)
+library(lubridate)
+library(dplyr)
+library(tidycensus)
+library(stringr)
+library(ggplot2)
+
+#load and manipulate covid data
+covid <- read.csv("final-project/covid-19/data/covid_counties_date.csv") %>%
+  rename(NAME=county)
+covid$date <- lubridate::mdy(covid$date)
+county <- st_read("final-project/shapefiles/grids/us_county_continental.shp") %>%
+  filter(STATEFP=="06")
+
+covid_data <- full_join(covid, county, by = "NAME")
+covid_data <- st_as_sf(covid_data)
+covid_data <- covid_data %>%
+  filter(state=="California")
+
+cal_pop <- get_acs(geography = "county", 
+                   variables = "B01003_001",
+                   state = "CA",
+                   survey = "acs1",
+                   year = 2019)
+cal_pop$NAME <- str_remove(cal_pop$NAME, " County, California")
+cal_pop_sf <- st_as_sf(cal_pop)
+
+
+covid.shp <- merge(covid_data, cal_pop, by = "NAME")
 
 #### clipping to just california
 
-cali_centr <- st_read("shapefiles/smoke/centroids/california_smoke_county_centroids.shp")
+cali_centr <- st_read("centroids/us-annual-smoke_county_centroids.shp", crs=4326)
 
 cali_centr$X <- st_coordinates(cali_centr)[,1]
 cali_centr$Y <- st_coordinates(cali_centr)[,2]
@@ -15,7 +46,7 @@ hist(cali_centr$smoke.2020, xlab = "PM2.5", main = "observed",
 hist(cali_centr$logsmoke, ylab = "PM2.5", main = "empirical logit",
      border= "white", col = "seagreen3")
 
-#conver to sp
+#convert to sp
 cali_centr_sp <- cali_centr %>%
   st_as_sf(coords = c("LONGITUDE", "LATITUDE"), crs =4326)
 

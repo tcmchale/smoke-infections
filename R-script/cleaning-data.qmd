@@ -38,7 +38,7 @@ setwd("~/Desktop/Wildfire-fungi-project/repository/smoke-infections")
 california_centroid <- st_read("final-project/shapefiles/smoke/california_smoke_county_centroids.shp")
 
 smoke_dly <- read.csv("final-project/daily-10km-smokePM/smoke_daily_10km.csv")
-#smoke_avg <- read.csv("final-project/daily-10km-smokePM/daily_average_smokePM-pred.csv")
+smoke_avg <- read.csv("final-project/daily-10km-smokePM/daily_average_smokePM-pred.csv")
 
 covid <- read.csv("final-project/covid-19/data/covid_counties_date.csv")
 mask <- read.csv("final-project/covid-19/data/mask-use-survey.csv")
@@ -66,10 +66,10 @@ ca_county <- filter(county, STATEFP == "06")
 tenkm_sf <- st_as_sf(tenkm)
 
 #cut tenkm with california counties
-tenkm_california <- st_intersection(tenkm, california_counties)
+tenkm_california <- st_intersection(tenkm, ca_county)
 
-#add smoke to tenkm_ca
-tenkm_casmoke <- full_join(tenkm_california, smoke_2020, by = "ID")
+#add smoke by county with missing dates removed
+smoke_avg <- read.csv("county_smoke_nao.csv")
 
 #filter covid file to just California
 covid <- filter(covid, state == "California") %>%

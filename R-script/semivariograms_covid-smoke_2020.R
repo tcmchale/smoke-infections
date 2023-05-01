@@ -10,7 +10,6 @@ library(geoR)
 library(automap)
 
 annual_smoke <- st_read("shapefiles/smoke/us-annual-smoke_county/us-annual-smoke_county.shp",crs=4326)
-st_transform(annual_smoke, crs=4326)
 
 
 covid_county <- st_read("shapefiles/covid/us_total-covid2020_with-pop")
