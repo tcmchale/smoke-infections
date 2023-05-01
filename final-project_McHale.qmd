@@ -2,11 +2,10 @@
 title: "Smoke Exposure and COVID-19 in California"
 output: html
 editor: visual
-echo: false
+echo: true
 message: false
 warning: false
 error: false
-quiet: true
 ---
 
 ```{r}
@@ -31,12 +30,16 @@ library(ggrepel)
 library(gstat)
 library(knitr)
 library(geoR)
-
+library(rgdal)
 ```
 
 ## Interactive Exploration of Association between Smoke Exposure and COVID-19 in 2020
 
 Please navigate to the link in order to explore the incidence of COVID-19 cases and deaths for each month of 2020 as well as the smoke exposure for particulate matter (PM) of 2.5 mm in California in 2020.
+
+You can select each month of 2020 for COVID-19 cases and deaths and it will display the incidence per 10,000 persons for each county for that month. Below the COVID-19 map is an interactive map of smoke exposure. This displays the PM 2.5 mm smoke exposure in each county of California in 2020. You can pick each month to display to correspond to the COVID-19 maps.
+
+Since the influence and timing of smoke exposure leading to a respiratory infection is not clear, this lets you interact with different time points between smoke exposure and COVID-19. For example, if there is an incubation period between smoke exposure that lasts several weeks or months you can look at COVID-19 months after the smoke exposure. This might be expected if smoke exposure causes lung injury that pre-disposes individuals to an increased risk of COVID-19
 
 ```{r, results='asis'}
 cat("[View the Shiny app](https://mchal053.shinyapps.io/smoke-covid/)")
@@ -44,9 +47,13 @@ cat("[View the Shiny app](https://mchal053.shinyapps.io/smoke-covid/)")
 
 ## Explore the Associations of Population and Demographic Data
 
+::: callout-note
+If you see loading bars below, I apologize. I've tried every method I know to try to suppress that output and could not get rid of it in the rendered html.
+:::
+
 ```{r}
 #obtain ACS data about population and median income for california
-california_county <- counties("California", year = 2020)
+california_county <- suppressMessages(counties("California", year = 2020))
 california_data <- get_acs(geography = "county", variables = c("B01003_001", "B19013_001"), year = 2020, quietly = TRUE)
 
 cali_wide <- california_data %>% 
@@ -78,6 +85,7 @@ mask_ca$COUNTYFP <- as.character(mask_ca$COUNTYFP)
 mask_ca <- mask_ca %>%
   mutate(COUNTYFP = substr(as.character(COUNTYFP), 2, nchar(as.character(COUNTYFP))))
 
+#join mask use survey to the california dataframe
 california <- california %>%
   left_join(mask_ca, by = "COUNTYFP")
 
@@ -133,7 +141,12 @@ california_sf$NAME <- str_remove(california_sf$NAME, ", California")
 
 ```{r}
 
-ca_smoke <- st_read("final-project/shapefiles/smoke/california_smoke_county_centroids.shp", quietly=TRUE)
+
+
+# Read the shapefile
+ca_smoke <- readOGR(dsn = "final-project/shapefiles/smoke",
+                    layer = "california_smoke_county_centroids")
+
 
 
 ```
@@ -269,7 +282,7 @@ labor_plotly <- ggplotly(california_labor, tooltip = "text", dynamicTicks = TRUE
 labor_plotly
 ```
 
-#### Mask Use Survey 
+#### Mask Use Survey
 
 This data was taken from the New York Times github COVID-19 page. I am displaying the percent of persons who rated "ALWAYS" wearing a mask, since this was the most common survey response. The other responses can be seen in the label when you hover over the county.
 
