@@ -1,0 +1,443 @@
+---
+title: "Smoke Exposure and COVID-19 in California"
+output: html
+editor: visual
+echo: true
+message: false
+warning: false
+error: false
+---
+
+```{r}
+library(dplyr)
+library(stringr)
+library(tidyr)
+library(tidycensus)
+library(dplyr)
+library(sf)
+library(ggplot2)
+library(scales)
+library(ggmap)
+library(ggspatial)
+library(rnaturalearth)
+library(rnaturalearthdata)
+library(tidyverse)
+library(tigris)
+library(plotly)
+library(mapproj)
+library(ggtext)
+library(ggrepel)
+library(gstat)
+library(knitr)
+library(geoR)
+library(rgdal)
+```
+
+
+## Interactive Exploration of Association between Smoke Exposure and COVID-19 in 2020
+
+Please navigate to the link in order to explore the incidence of COVID-19 cases and deaths for each month of 2020 as well as the smoke exposure for particulate matter (PM) of 2.5 mm in California in 2020.
+
+You can select each month of 2020 for COVID-19 cases and deaths and it will display the incidence per 10,000 persons for each county for that month. Below the COVID-19 map is an interactive map of smoke exposure. This displays the PM 2.5 mm smoke exposure in each county of California in 2020. You can pick each month to display to correspond to the COVID-19 maps.
+
+Since the influence and timing of smoke exposure leading to a respiratory infection is not clear, this lets you interact with different time points between smoke exposure and COVID-19. For example, if there is an incubation period between smoke exposure that lasts several weeks or months you can look at COVID-19 months after the smoke exposure. This might be expected if smoke exposure causes lung injury that pre-disposes individuals to an increased risk of COVID-19
+
+
+```{r, results='asis'}
+cat("[View the Shiny app](https://mchal053.shinyapps.io/smoke-covid/)")
+```
+
+
+## Explore the Associations of Population and Demographic Data
+
+::: callout-note
+If you see loading bars below, I apologize. I've tried every method I know to try to suppress that output and could not get rid of it in the rendered html.
+:::
+
+
+```{r}
+#obtain ACS data about population and median income for california
+california_county <- suppressMessages(counties("California", year = 2020))
+california_data <- get_acs(geography = "county", variables = c("B01003_001", "B19013_001"), year = 2020, quietly = TRUE)
+
+cali_wide <- california_data %>% 
+  pivot_wider(names_from = variable, values_from = c(estimate, moe), 
+              names_sep = "_", values_fn = list) %>%
+  rename(population = estimate_B01003_001, 
+         population_moe = moe_B01003_001, 
+         median_income = estimate_B19013_001, 
+         median_income_moe = moe_B19013_001)
+cali_wide <- cali_wide %>% 
+  select(-population_moe)
+
+
+#join population and income data to california
+california <- left_join(california_county, cali_wide, by= "GEOID")
+california$population <- unlist(california$population)
+california$median_income <- unlist(california$median_income)
+california$median_income_moe <- unlist(california$median_income_moe)
+
+## add mask use data
+##add mask data
+mask <- read.csv("final-project/covid-19/data/mask-use-survey.csv")
+mask$COUNTYFP <- as.numeric(as.character(mask$COUNTYFP))
+# Filter mask use data for California
+mask_ca <- mask %>%
+  mutate(StateFIPS = floor(COUNTYFP / 1000)) %>%
+  filter(StateFIPS == 6) 
+mask_ca$COUNTYFP <- as.character(mask_ca$COUNTYFP)
+mask_ca <- mask_ca %>%
+  mutate(COUNTYFP = substr(as.character(COUNTYFP), 2, nchar(as.character(COUNTYFP))))
+
+#join mask use survey to the california dataframe
+california <- california %>%
+  left_join(mask_ca, by = "COUNTYFP")
+
+#obtain occupational data
+# Define variables to retrieve
+variables <- c("B24011_001", "B24011_004", "B24011_016", "B24011_019", "B24011_031", "B24011_034")
+
+# Retrieve data
+occ_data <- get_acs(geography = "county", variables = variables, 
+                    year = 2020, survey = "acs5", state = "CA")
+
+# Filter for California and relevant labor categories
+ca_counties <- occ_data %>% 
+  filter(str_detect(variable, "B24011_004|B24011_007|B24011_011"))
+
+
+
+
+# Reshape the data
+ca_counties <- occ_data %>% 
+  select(GEOID, NAME, variable, estimate) %>% 
+  pivot_wider(names_from = variable, values_from = estimate) %>% 
+  mutate(across(starts_with("B24011"), as.numeric))
+
+# Calculate the total number of laborers and outdoor laborers per county
+ca_counties <- ca_counties %>% 
+  mutate(total_laborers = rowSums(select(., starts_with("B24011"))),
+         outdoor_laborers = rowSums(select(., c("B24011_031", "B24011_034"))))
+
+# Calculate the rate of outdoor laborers per county as a percentage of total laborers
+ca_counties <- ca_counties %>% 
+  mutate(outdoor_laborer_rate = outdoor_laborers/total_laborers * 100)
+
+# Calculate the overall rate of outdoor laborers in California
+ca_total <- ca_counties %>% 
+  summarize(total_laborers = sum(total_laborers),
+            outdoor_laborers = sum(outdoor_laborers)) %>% 
+  mutate(outdoor_laborer_rate = outdoor_laborers/total_laborers * 100)
+
+california <- left_join(ca_counties, california, by= "GEOID")
+california$outdoor_laborer_rate <- unlist(california$outdoor_laborer_rate)
+california$outdoor_laborers <- unlist(california$outdoor_laborers)
+
+california_sf <- st_as_sf(california)
+
+# Remove ", California" from NAME column
+california_sf$NAME <- str_remove(california_sf$NAME, ", California")
+
+
+
+
+```
+
+```{r}
+
+
+
+# Read the shapefile
+ca_smoke <- readOGR(dsn = "final-project/shapefiles/smoke",
+                    layer = "california_smoke_county_centroids")
+
+
+
+```
+
+```{r}
+#load and manipulate covid data
+covid <- read.csv("final-project/covid-19/data/covid_counties_date.csv") %>%
+  rename(NAME=county)
+covid$date <- lubridate::mdy(covid$date)
+county <- st_read("final-project/shapefiles/grids/us_county_continental.shp", quiet = TRUE) %>%
+  filter(STATEFP=="06")
+
+covid_data <- full_join(covid, county, by = "NAME")
+covid_data <- st_as_sf(covid_data)
+covid_data <- covid_data %>%
+  filter(state=="California")
+
+cal_pop <- get_acs(geography = "county", 
+                   variables = "B01003_001",
+                   state = "CA",
+                   survey = "acs1",
+                   year = 2019)
+cal_pop$NAME <- str_remove(cal_pop$NAME, " County, California")
+
+
+covid.shp <- merge(covid_data, cal_pop, by = "NAME")
+covid.shp <- covid.shp %>%
+  rename(population = estimate) %>%
+  select(c(-variable, -moe))
+covid.shp$cases_per10k <- (covid.shp$cases/covid.shp$population)*10000
+covid.shp$deaths_per10k <- (covid.shp$deaths/covid.shp$population)*10000
+```
+
+
+### Population Map
+
+According to the American Community Survey (ACS) data, California had an estimated population of over 39 million in 2020, making it the most populous state in the United States. The population is diverse, with individuals from various ethnic and racial backgrounds. About 60% of the population resides in urban areas, with the largest cities being Los Angeles, San Diego, and San Jose. The median household income is \$80,440. The education level is diverse, with approximately 31% of the population holding a bachelor's degree or higher. The follwoing map shows the population of each county on a log base 10 scale. You can hover over each county to view additional demographic data.
+
+
+```{r}
+
+
+california_pop_gg <- ggplot() +
+  geom_sf(data = california_sf, aes(fill = population, 
+                                    text = sprintf("County: %s<br>Income: $%s<br>Population: %s<br>Outdoor laborer rate: %s%%", 
+                                                   NAME, format(median_income, big.mark = ","), format(population, big.mark = ","), round(outdoor_laborer_rate))),
+          color = "black") +
+  scale_fill_viridis_c(option = "C", trans= "log10",
+                       breaks = c(1, 10, 100, 1000, 10000, 100000), 
+                       labels = c("1", "10", "100", "1k", "10k", "100k"),
+                       guide = guide_colorbar(title = "Population", 
+                                              direction = "vertical", 
+                                              barwidth = 5, barheight = 3,
+                                              title.position = "top",
+                                              label.position = "right",
+                                              label.theme = element_text(size = 10, 
+                                                                         margin = margin(t = 0, r = 5, b = 0, l = 5)),
+                                              ticks = TRUE, nbin = 100)) +
+  theme_void()
+
+pop_plotly <- ggplotly(california_pop_gg, tooltip = "text", dynamicTicks = TRUE)
+pop_plotly
+
+
+```
+
+
+### Demographic Maps
+
+#### Median Income
+
+
+```{r}
+
+# Create the ggplot object
+california_gg <- ggplot() +
+  geom_sf(data = california_sf, aes(fill = median_income, 
+                                    text = sprintf("County: %s<br>Income: $%s<br>Population: %s<br>Outdoor laborer rate: %s%%", 
+                                                   NAME, format(median_income, big.mark = ","), format(population, big.mark = ","), round(outdoor_laborer_rate))),
+          color = "black") +
+  scale_fill_viridis_c(option = "B", trans = "log10",
+                       breaks = c(1000, 20000, 50000, 100000, 1000000, 10000000),
+                       labels = c("$1000", "$20000", "$50000", "$100000", "$1000000", "$10000000"),
+                       guide = guide_colorbar(title = "Median Income",
+                                              direction = "vertical",
+                                              barwidth = 5, barheight = 3,
+                                              title.position = "top",
+                                              label.position = "right",
+                                              label.theme =
+                                                element_text(size = 10,
+                                                             margin =
+                                                               margin(t = 0,
+                                                                      r = 5,
+                                                                      b = 0,
+                                                                      l = 5)),
+                                              ticks = TRUE, nbin = 100)) +
+  theme_void()
+
+# Create plotly object
+income_plotly <- ggplotly(california_gg, tooltip = "text", dynamicTicks = TRUE)
+income_plotly
+
+
+```
+
+
+#### Rate of Laborers Predominantly Outdoors
+
+Since smoke is likely to affect workers who spend most of their time outdoors, I wanted to look at the rate of outdoor laborers in California. The variables used to determine outdoor laborers compared to all laborers were "B24011_031" and "B24011_034" from the ACS data. These two variables represent the number of workers 16 years and over who worked in farming, fishing, and forestry occupations, specifically those who worked on a farm, ranch, or in an orchard (B24011_031) or those who worked in other farming, fishing, and forestry occupations (B24011_034). These two variables were selected and summed to calculate the total number of outdoor laborers per county. The total number of laborers per county was also calculated by summing all the variables starting with "B24011". The outdoor laborer rate was then determined by dividing the total number of outdoor laborers by the total number of laborers in each county, and multiplying by 100 to express it as a percentage.
+
+
+```{r}
+# Create the ggplot object
+california_labor <- ggplot() +
+  geom_sf(data = california_sf, aes(fill = outdoor_laborer_rate, 
+                                    text = sprintf("County: %s<br>Income: $%s<br>Population: %s<br>Outdoor laborer rate: %s%%", 
+                                                   NAME, format(median_income, big.mark = ","), format(population, big.mark = ","), round(outdoor_laborer_rate))),
+          color = "black") +
+  scale_fill_viridis_c(option = "D", 
+                       breaks = c(0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100),
+                       labels = c("0%", "10%", "20%", "30%", "40%", "50%", "60%", "70%", "80%", "90%", "100%"),
+                       guide = guide_colorbar(title = "Outdoor Laborer Rate",
+                                              direction = "vertical",
+                                              barwidth = 5, barheight = 3,
+                                              title.position = "top",
+                                              label.position = "right",
+                                              label.theme =
+                                                element_text(size = 10,
+                                                             margin =
+                                                               margin(t = 0,
+                                                                      r = 5,
+                                                                      b = 0,
+                                                                      l = 5)),
+                                              ticks = TRUE, nbin = 100)) +
+  theme_void()
+
+# Create plotly object
+labor_plotly <- ggplotly(california_labor, tooltip = "text", dynamicTicks = TRUE)
+labor_plotly
+```
+
+
+#### Mask Use Survey
+
+This data was taken from the New York Times github COVID-19 page. I am displaying the percent of persons who rated "ALWAYS" wearing a mask, since this was the most common survey response. The other responses can be seen in the label when you hover over the county.
+
+Specifically from the READme.md description at https://github.com/nytimes/covid-19-data/tree/master/mask-use:\
+"This data comes from a large number of interviews conducted online by the global data and survey firm Dynata at the request of The New York Times. The firm asked a question about mask use to obtain 250,000 survey responses between July 2 and July 14, enough data to provide estimates more detailed than the state level. (Several states have imposed new mask requirements since the completion of these interviews.)
+
+Specifically, each participant was asked: *How often do you wear a mask in public when you expect to be within six feet of another person?*
+
+This survey was conducted a single time, and at this point we have no plans to update the data or conduct the survey again."
+
+
+```{r}
+# Create the ggplot of mask use data
+california_gg <- ggplot() +
+  geom_sf(data = california_sf, aes(fill = ALWAYS,
+                                      text = sprintf("County: %s<br>Never: %s%%<br>Rarely: %s%%<br>Sometimes: %s%%<br>Frequently: %s%%<br>Always: %s%%", 
+                                                     NAME, round(NEVER * 100, 2), round(RARELY * 100, 2), round(SOMETIMES * 100, 2), round(FREQUENTLY * 100, 2), round(ALWAYS * 100, 2))),
+          color = "black") +
+  scale_fill_viridis_c(option = "E",
+                       breaks = seq(0, 1, 0.1),
+                       labels = paste0(seq(0, 100, 10), "%")) +
+  theme_void()
+
+
+
+# Create plotly object
+california_plotly <- ggplotly(california_gg, tooltip = "text", dynamicTicks = TRUE)
+california_plotly
+```
+
+
+## Spatiotemporal Association of Smoke Exposure and COVID-19
+
+In order to determine if there is a spatiotemporal association between smoke esposure and incidence of COVID-19 in California in 2020, we start by looking at the semivariograms of COVID-19 and smoke exposure.
+
+Semivariograms are a method of quantifying the degree of spatial autocorrelation that exists in a dataset. Spatial autocorrelation occurs when the occurrence of a disease in space is correlated with increased incidence of the same disease. A semivariogram describes how the data are related with distance by plotting semivariance against separation distance. Semivariance is defined as the sum of squared distance between each data value and the mean or expected value.
+
+The following example displays the interpretation of the semivariogram values:
+
+![](images/Screenshot%202023-04-30%20at%209.57.55%20PM.png)
+
+Parameters of the spatial model:
+
+-   Nugget is the variance of the random variable at a distance of 0.
+
+-   Partial sill is the variance of the random variable at larger distances.
+
+-   Range is the distance over which spatial autocorrelation is observed. Observed variables within the distance of the range experience spatial autocorrelation while those beyond the range do not.
+
+The variogram is only valid in data that is approximately normally distributed. This is rarely true in observed case incidences in infectious diseases. The histograms display the raw and log transformed case incidences.
+
+
+```{r}
+#create centroids out of counties
+covid.centr <- st_centroid(covid.shp)
+
+
+#log transform cases and deaths
+covid.centr$logcase <- log(covid.centr$cases_per10k)
+covid.centr$logdeath <- log(covid.centr$deaths_per10k)
+
+
+#look at histograms
+hist.case <- hist(covid.centr$cases_per10k, xlab = "Cases per 10k Persons", main = "observed", 
+     border = "white", col = "royalblue2")
+hist.logcase <- hist(covid.centr$logcase, ylab = "Cases per 10k Persons", main = "empirical logit",
+     border= "white", col = "seagreen3")
+
+hist.case
+hist.logcase
+
+#convert to sp
+covid.centr_sp <- covid.centr %>%
+  st_as_sf(coords = c("LONGITUDE", "LATITUDE"), crs = 4326)
+
+coords <- st_coordinates(covid.centr_sp)
+
+
+cali_v <- variogram(logcase~1, data=covid.centr_sp)
+vgm <- vgm(psill=150, model = "Exp", range = 500, nugget = 50000)
+covid.fit <- fit.variogram(cali_v, model=vgm, fit.method=1)
+plot(cali_v, covid.fit, main = "Semivariogram of COVID Cases")
+
+psill <- covid.fit$psill
+range <- covid.fit$range
+nugget <- covid.fit$psill[covid.fit$model == "Nug"]
+
+covid_params <- data.frame(
+  Parameter = c("nugget", "spherical_psill", "range"),
+  Value = c(covid.fit$psill[covid.fit$model == "Nug"], 
+            covid.fit$psill[covid.fit$model != "Nug"], 
+            covid.fit$range[covid.fit$model != "Nug"]))
+
+
+kable(covid_params)
+```
+
+
+\
+The semivariogram for COVID-19 cases in 2020 indicates that in California, there was spatial autocorrelation for cases within 128 degrees (or approximately 14 km).
+
+
+```{r}
+#log transform smoke
+ca_smoke$logsmoke <- log(ca_smoke$smoke.2020)
+
+
+#look at histograms
+hist.smoke <- hist(ca_smoke$smoke.2020, xlab = "Total Smoke Exposure, 2020", main = "observed", 
+     border = "white", col = "royalblue2")
+hist.logsmoke <- hist(covid.centr$logcase, ylab = "Cases per 10k Persons", main = "empirical logit",
+     border= "white", col = "seagreen3")
+
+hist.smoke
+hist.logsmoke
+
+#convert to sp
+ca_smoke <- ca_smoke %>%
+  st_as_sf(coords = c("LONGITUDE", "LATITUDE"), crs = 4326)
+
+coords <- st_coordinates(ca_smoke)
+
+
+cali_v <- variogram(logsmoke~1, data=ca_smoke)
+vgm <- vgm(psill=150, model = "Exp", range = 500, nugget = 50000)
+smoke.fit <- fit.variogram(cali_v, model=vgm, fit.method=1)
+plot(cali_v, smoke.fit, main = "Semivariogram of Smoke Exposure")
+
+psill <- smoke.fit$psill
+range <- smoke.fit$range
+nugget <- smoke.fit$psill[smoke.fit$model == "Nug"]
+
+smoke_params <- data.frame(
+  Parameter = c("nugget", "spherical_psill", "range"),
+  Value = c(smoke.fit$psill[smoke.fit$model == "Nug"], 
+            smoke.fit$psill[smoke.fit$model != "Nug"], 
+            smoke.fit$range[smoke.fit$model != "Nug"]))
+
+
+kable(smoke_params)
+```
+
+
+Both COVID-19 cases and smoke exposure in 2020 in California appear to demonstrate substantial spatial autocorrelation up to approximately 130 kilomters. This indicates that there may be correlation between the two variables. The next step will be to build a universal krige model to explore the correlation between these variables. I plan to also include the demographic variables that I have displayed in maps in this project.
+
+I attempted to build a universal krige model but I have not yet gotten it to function. At this point this is the extent of my analysis. I recently met with a spatial epidemiologist at the University of Minnesota and hope to push this project further with their guidance.
+

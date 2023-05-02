@@ -1,3 +1,5 @@
+------------------------------------------------------------------------
+
 ---
 title: "Smoke Exposure and COVID-19 in California"
 output: html
@@ -29,8 +31,11 @@ library(ggtext)
 library(ggrepel)
 library(gstat)
 library(knitr)
-library(geoR)
 library(rgdal)
+```
+
+```{r setup, include=FALSE}
+knitr::opts_knit$set(root.dir = "~/Desktop/Wildfire-fungi-project/repository/smoke-infections")
 ```
 
 ## Interactive Exploration of Association between Smoke Exposure and COVID-19 in 2020
@@ -53,7 +58,7 @@ If you see loading bars below, I apologize. I've tried every method I know to tr
 
 ```{r}
 #obtain ACS data about population and median income for california
-california_county <- suppressMessages(counties("California", year = 2020))
+california_county <- invisible(counties("California", year = 2020))
 california_data <- get_acs(geography = "county", variables = c("B01003_001", "B19013_001"), year = 2020, quietly = TRUE)
 
 cali_wide <- california_data %>% 
@@ -142,10 +147,8 @@ california_sf$NAME <- str_remove(california_sf$NAME, ", California")
 ```{r}
 
 
-
 # Read the shapefile
-ca_smoke <- readOGR(dsn = "final-project/shapefiles/smoke",
-                    layer = "california_smoke_county_centroids")
+ca_smoke <- st_read("final-project/shapefiles/smoke/california_smoke_county_centroids.shp")
 
 
 
