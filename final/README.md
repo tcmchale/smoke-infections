@@ -17,3 +17,5 @@ Division of labor: Thomas McHale is responsible for all features in this project
 
 Future work: See above, I hope to finish the statistical analysis. In addition, I hope to apply this to fungal infections.
 
+
+Not for submission, but I have continued work on the project, if you are interested: https://majestic-syrniki-62ba33.netlify.app
